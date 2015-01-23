@@ -22,7 +22,7 @@ for channel in channels:
     irc.send(bytes('JOIN #' + channel + '\r\n','UTF-8'))
 
 
-info_url = "https://www.changetip.com/tip-online/slack"
+info_url = "https://www.changetip.com/tip-online/twitch"
 get_started = "To send your first tip, login with your slack account on ChangeTip: %s" % info_url
 
 
