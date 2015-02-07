@@ -4,7 +4,7 @@ import os
 import threading
 import queue
 from TwitchChangeTipBot import TwitchChangeTipBot
-
+import re
 
 class TwitchIRCBot(irc.bot.SingleServerIRCBot):
     def __init__(self, botname, server, port=6667):
@@ -12,7 +12,11 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
         access_token = os.getenv("TWITCH_ACCESS_TOKEN", "fake_access_token")
         irc.bot.SingleServerIRCBot.__init__(self, [(server, port, access_token)], botname, botname)
 
+        #Bot username
         self.botname = botname
+
+        #Changetip set up
+        self.TipBot = TwitchChangeTipBot()
 
         # TODO - Write method for getting list of twitch changetip users (channels to join)
         channels = ["#tippybot", "#mances14", "#bitcoinsantaclaus"]
@@ -39,42 +43,53 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
         threading.Thread(target=self.message_sender, args=(serv,)).start()
 
     def on_pubmsg(self, serv, event):
-        message = ''.join(event.arguments)
+        message = ''.join(event.arguments).strip()
         author = event.source.nick
         channel = event.target
+        receiver = channel.replace("#", "") #set default receiver to the channel
+
         print(channel+" "+author+": "+message)
 
         if message.lower().startswith('!changetip '):
-            # TODO - Figure out tipping users in the channel besides channel owner
-            receiver = channel.replace("#", "")
-            threading.Thread(target=self.changetip_sender, args=(serv,channel,author,receiver,message[11:])).start()
+            # Check if the message contains a receiver, if not then assume it is for the channel owner
+            pattern = re.compile("(?<=^|(?<=[^a-zA-Z0-9-_\.]))@([A-Za-z]+[A-Za-z0-9]+)")
+            tipped = re.findall(pattern, message)
+            if len(tipped) == 0:
+                threading.Thread(target=self.changetip_sender, args=(channel, author, receiver, message[11:])).start()
+            elif len(tipped) == 1:
+                tipped_user = tipped[0].lower()
+                if tipped_user in self.channels[channel].users() or tipped_user == receiver:
+                    receiver = tipped_user
+                    threading.Thread(target=self.changetip_sender, args=(channel, author, receiver, message[11:])).start()
+                else:
+                    self.message_send_queue.put((channel, "@%s I don't see that user in this channel." % author.capitalize()))
+            else:
+                self.message_send_queue.put((channel, "@%s Too many recipients in your message." % author.capitalize()))
 
     # Thread for sending and receiving data from ChangeTip
-    def changetip_sender(self, serv, channel, sender, receiver, message):
+    def changetip_sender(self, channel, sender, receiver, message):
         # Submit a tip
-        # TODO - Come up with better usage syntax and replies
-        TipBot = TwitchChangeTipBot()
         tip_data = {
             "sender": "%s" % sender,
             "receiver": "%s" % receiver,
             "message": message,
-            "context_uid": TipBot.unique_id(channel+" "+receiver+": "+message[11:]),
+            "context_uid": self.TipBot.unique_id(channel+" "+receiver+": "+message[11:]),
             "meta": {}
         }
-        response = TipBot.send_tip(**tip_data)
+        response = self.TipBot.send_tip(**tip_data)
         out = ""
         if response.get("error_code") == "invalid_sender":
-            out = "To send your first tip, login with your slack account on ChangeTip: %s" % TipBot.info_url
+            out = "@%s To send your first tip, login with your Twitch.tv account on ChangeTip: %s" % (sender.capitalize(), self.TipBot.info_url)
         elif response.get("error_code") == "duplicate_context_uid":
-            out = "That looks like a duplicate tip."
+            out = "@%s That looks like a duplicate tip." % sender.capitalize()
         elif response.get("error_message"):
-            out = response.get("error_message")
+            out = "@%s %s" % (sender.capitalize(), response.get("error_message"))
         elif response.get("state") in ["ok", "accepted"]:
             tip = response["tip"]
             if tip["status"] == "out for delivery":
-                out += "The tip sent by %s for %s is out for delivery. %s needs to collect by connecting their ChangeTip account to Twitch at %s" % (sender, tip["amount_display"], tip["receiver"], TipBot.info_url)
+                out += "<3 @%s Tip received from @%s for %s. Collect it by connecting your ChangeTip account to Twitch at %s" % (tip["receiver"], sender.capitalize(), tip["amount_display"], self.TipBot.info_url)
             elif tip["status"] == "finished":
-                out += "The tip by %s has been delivered, %s has been added to %s's ChangeTip wallet." % (sender, tip["amount_display"], tip["receiver"])
+                out += "<3 @%s Tip received from @%s, %s has been added to your ChangeTip wallet." % (tip["receiver"].capitalize(), sender.capitalize(), tip["amount_display"])
         print("--Changetip Response: " + str(response))
         self.message_send_queue.put((channel, out))
 
