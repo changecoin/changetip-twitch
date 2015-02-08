@@ -6,6 +6,7 @@ import queue
 from TwitchChangeTipBot import TwitchChangeTipBot
 import re
 
+#TODO: Add logging to the bot
 class TwitchIRCBot(irc.bot.SingleServerIRCBot):
     def __init__(self, botname, server, port=6667):
 
@@ -39,24 +40,28 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
         threading.Thread(target=self.message_sender, args=(serv,)).start()
 
     def load_user_list(self, offset):
-        # Get 50 channels every 10 seconds, to stay just ahead of the twitch max
         limit = 50
-        print("Retrieving user list... (%s - %s)" % (offset, offset+limit))
+        print("Retrieving user list... [%s - %s]" % (offset, offset+limit))
         response = self.TipBot.get_users(offset, limit)
         has_next = response.get("meta").get("next") is not None
+
         for user in response["objects"]:
-            self.channel_join_queue.put(user.get("channel_username"))
+            if user.get("channel_username") not in self.channels:
+                self.channel_join_queue.put(user.get("channel_username"))
+
         if has_next:
             offset += limit+1
             threading.Timer(15.0, self.load_user_list, args=(offset,)).start()
-        # TODO: If list of users is done loading, then start a thread that only gets new users every x minutes.
-        # else:
+        # If list of users is done loading, then start a thread that only gets new users every x minutes.
+        else:
+            threading.Timer(300.0, self.load_user_list, args=(offset,)).start()
 
     def on_pubmsg(self, serv, event):
         message = ''.join(event.arguments).strip()
         author = event.source.nick
         channel = event.target
-        receiver = channel.replace("#", "") #set default receiver to the channel
+        # Set default receiver to the channel
+        receiver = channel.replace("#", "")
 
         print(channel+" "+author+": "+message)
 
@@ -110,7 +115,7 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
         while True:
             if not self.channel_join_queue.empty() and self.channel_join_limiter < limit:
                 channel = self.channel_join_queue.get()
-                print("--Joining", channel)
+                print("--Joining #%s" % channel)
                 self.channels[channel] = Channel()
                 serv.join(channel)
                 self.channel_join_limiter += 1
@@ -120,6 +125,7 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
         self.channel_join_limiter -= 1
 
     # Thread for sending messages, capped at a limit of 20 messages per 30 seconds to follow twitch's restrictions
+    # TODO: Make the limit higher if bot is a mod in the channel
     def message_sender(self, serv):
         limit = 20
         seconds = 30.0
