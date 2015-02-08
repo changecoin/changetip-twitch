@@ -2,6 +2,7 @@ from changetip.bots.base import BaseBot
 import datetime
 import hashlib
 import os
+import requests
 
 class TwitchChangeTipBot(BaseBot):
 
@@ -17,3 +18,8 @@ class TwitchChangeTipBot(BaseBot):
         checksum.update(datetime.datetime.now().strftime('%Y-%m-%d:%H:%M:00').encode("utf8"))
 
         return checksum.hexdigest()[:16]
+
+    def get_users(self, offset=0, limit=200):
+        response = requests.get(self.get_api_url("/channels/twitch/users"), data={'offset': offset, 'limit': limit}, headers={'content-type': 'application/json'})
+        data = response.json()
+        return data

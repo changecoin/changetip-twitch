@@ -12,22 +12,16 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
         access_token = os.getenv("TWITCH_ACCESS_TOKEN", "fake_access_token")
         irc.bot.SingleServerIRCBot.__init__(self, [(server, port, access_token)], botname, botname)
 
-        #Bot username
+        # Bot username for reference
         self.botname = botname
 
-        #Changetip set up
+        # Changetip set up
         self.TipBot = TwitchChangeTipBot()
-
-        # TODO - Write method for getting list of twitch changetip users (channels to join)
-        channels = ["#tippybot", "#mances14", "#bitcoinsantaclaus"]
 
         # Channels set up
         self.channels = IRCDict()
         self.channel_join_queue = queue.Queue()
         self.channel_join_limiter = 0
-
-        for channel in channels:
-            self.channel_join_queue.put(channel)
 
         # Messages set up
         self.message_send_queue = queue.Queue()
@@ -39,8 +33,24 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
         print("Connected.")
         # Start channel joining thread
         threading.Thread(target=self.channel_joiner, args=(serv,)).start()
+        # Load channel list from Changetip
+        threading.Thread(target=self.load_user_list, args=(0,)).start()
         # Start message sending thread
         threading.Thread(target=self.message_sender, args=(serv,)).start()
+
+    def load_user_list(self, offset):
+        # Get 50 channels every 10 seconds, to stay just ahead of the twitch max
+        limit = 50
+        print("Retrieving user list... (%s - %s)" % (offset, offset+limit))
+        response = self.TipBot.get_users(offset, limit)
+        has_next = response.get("meta").get("next") is not None
+        for user in response["objects"]:
+            self.channel_join_queue.put(user.get("channel_username"))
+        if has_next:
+            offset += limit+1
+            threading.Timer(15.0, self.load_user_list, args=(offset,)).start()
+        # TODO: If list of users is done loading, then start a thread that only gets new users every x minutes.
+        # else:
 
     def on_pubmsg(self, serv, event):
         message = ''.join(event.arguments).strip()
@@ -104,7 +114,7 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
                 self.channels[channel] = Channel()
                 serv.join(channel)
                 self.channel_join_limiter += 1
-                threading.Timer(seconds, self.channel_unlimit)
+                threading.Timer(seconds, self.channel_unlimit).start()
 
     def channel_unlimit(self):
         self.channel_join_limiter -= 1
@@ -121,7 +131,7 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
                 print(channel+" "+self.botname+": "+message)
                 serv.privmsg(channel, message)
                 self.message_send_limiter += 1
-                threading.Timer(seconds, self.message_unlimit)
+                threading.Timer(seconds, self.message_unlimit).start()
 
     def message_unlimit(self):
         self.message_send_limiter -= 1
