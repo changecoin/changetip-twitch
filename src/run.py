@@ -83,7 +83,7 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
                 threading.Thread(target=self.changetip_sender, args=(channel, author, receiver, message[11:])).start()
             elif len(tipped) == 1:
                 tipped_user = tipped[0].lower()
-                if tipped_user in self.channels[channel].users() or tipped_user == receiver:
+                if tipped_user in self.channels[channel].users() or tipped_user == receiver or "#"+tipped_user in self.channels:
                     receiver = tipped_user
                     threading.Thread(target=self.changetip_sender, args=(channel, author, receiver, message[11:])).start()
                 else:
@@ -165,9 +165,9 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
                 channel = messagedata[0]
                 message = messagedata[1]
 
-                if messagedata is not self.last_message:
+                if message != self.last_message:
                     serv.privmsg(channel, message)
-                    self.last_message = channel+" "+self.botname+": "+message
+                    self.last_message = message
                     logging.info(channel+" "+self.botname+": "+message)
                     self.message_send_limiter += 1
                     threading.Timer(seconds, self.message_unlimit).start()
