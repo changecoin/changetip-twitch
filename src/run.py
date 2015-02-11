@@ -5,8 +5,15 @@ import threading
 import queue
 from TwitchChangeTipBot import TwitchChangeTipBot
 import re
+import logging
 
-#TODO: Add logging to the bot
+logger = logging.getLogger(__name__)
+logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', filename='twitch.log', level=logging.INFO)
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+console.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
+logging.getLogger('').addHandler(console)
+
 class TwitchIRCBot(irc.bot.SingleServerIRCBot):
     def __init__(self, botname, server, port=6667):
 
@@ -25,13 +32,18 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
         self.channel_join_limiter = 0
 
         # Messages set up
-        self.message_send_queue = queue.Queue()
+        self.message_send_queue = {
+            "high": queue.Queue(),
+            "medium": queue.Queue(),
+            "low": queue.Queue()
+        }
+        self.last_message = ""
         self.message_send_limiter = 0
 
-        print("Initialized...attempting to connect.")
+        logging.info('Bot initialized.')
 
     def on_welcome(self, serv, event):
-        print("Connected.")
+        logging.info('Connected to Twitch.tv IRC.')
         # Start channel joining thread
         threading.Thread(target=self.channel_joiner, args=(serv,)).start()
         # Load channel list from Changetip
@@ -41,14 +53,13 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
 
     def load_user_list(self, offset):
         limit = 50
-        print("Retrieving user list... [%s - %s]" % (offset, offset+limit))
+        logging.info("Retrieving user list... [%s - %s]" % (offset, offset+limit))
         response = self.TipBot.get_users(offset, limit)
         has_next = response.get("meta").get("next") is not None
-
         for user in response["objects"]:
-            if user.get("channel_username") not in self.channels:
-                self.channel_join_queue.put(user.get("channel_username"))
-
+            channel = "#"+user.get("channel_username")
+            if channel not in self.channels:
+                self.channel_join_queue.put(channel)
         if has_next:
             offset += limit+1
             threading.Timer(15.0, self.load_user_list, args=(offset,)).start()
@@ -63,9 +74,8 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
         # Set default receiver to the channel
         receiver = channel.replace("#", "")
 
-        print(channel+" "+author+": "+message)
-
         if message.lower().startswith('!changetip '):
+            logging.info(channel+" "+author+": "+message)
             # Check if the message contains a receiver, if not then assume it is for the channel owner
             pattern = re.compile("(?<=^|(?<=[^a-zA-Z0-9-_\.]))@([A-Za-z]+[A-Za-z0-9]+)")
             tipped = re.findall(pattern, message)
@@ -77,9 +87,10 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
                     receiver = tipped_user
                     threading.Thread(target=self.changetip_sender, args=(channel, author, receiver, message[11:])).start()
                 else:
-                    self.message_send_queue.put((channel, "@%s I don't see that user in this channel." % author.capitalize()))
+                    #TODO: If you dont see a user in a channel, check if the twitch account at least exists using the twitch api
+                    self.message_send_queue["low"].put((channel, "@%s I don't see that user in this channel." % author.capitalize()))
             else:
-                self.message_send_queue.put((channel, "@%s Too many recipients in your message." % author.capitalize()))
+                self.message_send_queue["low"].put((channel, "@%s Too many recipients in your message." % author.capitalize()))
 
     # Thread for sending and receiving data from ChangeTip
     def changetip_sender(self, channel, sender, receiver, message):
@@ -88,25 +99,29 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
             "sender": "%s" % sender,
             "receiver": "%s" % receiver,
             "message": message,
-            "context_uid": self.TipBot.unique_id(channel+" "+receiver+": "+message[11:]),
+            "context_uid": self.TipBot.unique_id(channel+" "+sender+": "+message),
             "meta": {}
         }
         response = self.TipBot.send_tip(**tip_data)
         out = ""
         if response.get("error_code") == "invalid_sender":
             out = "@%s To send your first tip, login with your Twitch.tv account on ChangeTip: %s" % (sender.capitalize(), self.TipBot.info_url)
+            self.message_send_queue["low"].put((channel, out))
         elif response.get("error_code") == "duplicate_context_uid":
             out = "@%s That looks like a duplicate tip." % sender.capitalize()
+            self.message_send_queue["low"].put((channel, out))
         elif response.get("error_message"):
             out = "@%s %s" % (sender.capitalize(), response.get("error_message"))
+            self.message_send_queue["low"].put((channel, out))
         elif response.get("state") in ["ok", "accepted"]:
             tip = response["tip"]
             if tip["status"] == "out for delivery":
                 out += "<3 @%s Tip received from @%s for %s. Collect it by connecting your ChangeTip account to Twitch at %s" % (tip["receiver"], sender.capitalize(), tip["amount_display"], self.TipBot.info_url)
+                self.message_send_queue["high"].put((channel, out))
             elif tip["status"] == "finished":
                 out += "<3 @%s Tip received from @%s, %s has been added to your ChangeTip wallet." % (tip["receiver"].capitalize(), sender.capitalize(), tip["amount_display"])
-        print("--Changetip Response: " + str(response))
-        self.message_send_queue.put((channel, out))
+                self.message_send_queue["medium"].put((channel, out))
+        logging.debug("Changetip Response: " + str(response))
 
     # Thread for joining channels, capped at a limit of 50 joins per 15 seconds to follow twitch's restrictions
     def channel_joiner(self, serv):
@@ -115,10 +130,10 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
         while True:
             if not self.channel_join_queue.empty() and self.channel_join_limiter < limit:
                 channel = self.channel_join_queue.get()
-                print("--Joining #%s" % channel)
                 self.channels[channel] = Channel()
                 serv.join(channel)
                 self.channel_join_limiter += 1
+                logging.info("Joining channel %s" % channel)
                 threading.Timer(seconds, self.channel_unlimit).start()
 
     def channel_unlimit(self):
@@ -129,18 +144,44 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
     def message_sender(self, serv):
         limit = 20
         seconds = 30.0
+        # Watch queue size and make sure it does not grow to large, log it if it does
+        threading.Timer(300.0, self.monitor_message_queue_size).start()
+
         while True:
-            if not self.message_send_queue.empty() and self.message_send_limiter < limit:
-                messagedata = self.message_send_queue.get()
+            high_size = self.message_send_queue["high"].qsize()
+            medium_size = self.message_send_queue["medium"].qsize()
+            low_size = self.message_send_queue["low"].qsize()
+            queue_size = high_size + medium_size + low_size
+
+            if queue_size > 0 and self.message_send_limiter < limit:
+                if high_size > 0:
+                    priority = "high"
+                elif medium_size > 0:
+                    priority = "medium"
+                else:
+                    priority = "low"
+
+                messagedata = self.message_send_queue[priority].get()
                 channel = messagedata[0]
                 message = messagedata[1]
-                print(channel+" "+self.botname+": "+message)
-                serv.privmsg(channel, message)
-                self.message_send_limiter += 1
-                threading.Timer(seconds, self.message_unlimit).start()
+
+                if messagedata is not self.last_message:
+                    serv.privmsg(channel, message)
+                    self.last_message = channel+" "+self.botname+": "+message
+                    logging.info(channel+" "+self.botname+": "+message)
+                    self.message_send_limiter += 1
+                    threading.Timer(seconds, self.message_unlimit).start()
 
     def message_unlimit(self):
         self.message_send_limiter -= 1
+
+    def monitor_message_queue_size(self,):
+        high_size = self.message_send_queue["high"].qsize()
+        medium_size = self.message_send_queue["medium"].qsize()
+        low_size = self.message_send_queue["low"].qsize()
+        queue_size = high_size + medium_size + low_size
+        if queue_size > 20:
+            logging.warning("Messaging queue is getting too big! HIGH:%s MEDIUM:%s LOW:%s" % (high_size, medium_size, low_size))
 
 if __name__ == "__main__":
     botname = os.getenv("TWITCH_BOT", "changetip")

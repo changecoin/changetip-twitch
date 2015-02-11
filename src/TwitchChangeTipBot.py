@@ -12,11 +12,9 @@ class TwitchChangeTipBot(BaseBot):
 
     #Just copied from the slack bot for the time being, change later
     def unique_id(self, post_data):
-        # Generatee a special id to prevent duplicates.
         checksum = hashlib.md5()
         checksum.update(str(post_data).encode("utf8"))
         checksum.update(datetime.datetime.now().strftime('%Y-%m-%d:%H:%M:00').encode("utf8"))
-
         return checksum.hexdigest()[:16]
 
     def get_users(self, offset=0, limit=200):
