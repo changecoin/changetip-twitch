@@ -46,7 +46,7 @@ Your bot's access token, required to connect to Twitch irc.
 You can acquire one easily for development by using the Third Party [Twitch Chat Password Generator app](twitchapps.com/tmi/) 
 
 Or you can set up a Twitch app in your account settings and make a request to the following url (with your Twitch app's info in place of the bracketed text)
-https://api.twitch.tv/kraken/oauth2/authorize?response_type=token&client_id=[your client ID]&redirect_uri=[your registered redirect URI]&scope=chat_login
+`https://api.twitch.tv/kraken/oauth2/authorize?response_type=token&client_id=[your client ID]&redirect_uri=[your registered redirect URI]&scope=chat_login`
 [For more information read Twitch's authentication documentation.](https://github.com/justintv/Twitch-API/blob/master/authentication.md) 
 
 Once you have this access token it will not expire unless you generate a new access token.
