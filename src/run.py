@@ -6,6 +6,7 @@ import queue
 from TwitchChangeTipBot import TwitchChangeTipBot
 import re
 import logging
+import requests
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', filename='twitch.log', level=logging.INFO)
@@ -17,7 +18,7 @@ logging.getLogger('').addHandler(console)
 class TwitchIRCBot(irc.bot.SingleServerIRCBot):
     def __init__(self, botname, server, port=6667):
 
-        access_token = os.getenv("TWITCH_ACCESS_TOKEN", "fake_access_token")
+        access_token = "oauth:"+os.getenv("TWITCH_ACCESS_TOKEN", "fake_access_token")
         irc.bot.SingleServerIRCBot.__init__(self, [(server, port, access_token)], botname, botname)
 
         # Bot username for reference
@@ -51,22 +52,6 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
         # Start message sending thread
         threading.Thread(target=self.message_sender, args=(serv,)).start()
 
-    def load_user_list(self, offset):
-        limit = 50
-        logging.info("Retrieving user list... [%s - %s]" % (offset, offset+limit))
-        response = self.TipBot.get_users(offset, limit)
-        has_next = response.get("meta").get("next") is not None
-        for user in response["objects"]:
-            channel = "#"+user.get("channel_username")
-            if channel not in self.channels:
-                self.channel_join_queue.put(channel)
-        if has_next:
-            offset += limit+1
-            threading.Timer(15.0, self.load_user_list, args=(offset,)).start()
-        # If list of users is done loading, then start a thread that only gets new users every x minutes.
-        else:
-            threading.Timer(300.0, self.load_user_list, args=(offset,)).start()
-
     def on_pubmsg(self, serv, event):
         message = ''.join(event.arguments).strip()
         author = event.source.nick
@@ -79,6 +64,8 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
             # Check if the message contains a receiver, if not then assume it is for the channel owner
             pattern = re.compile("(?<=^|(?<=[^a-zA-Z0-9-_\.]))@([A-Za-z]+[A-Za-z0-9]+)")
             tipped = re.findall(pattern, message)
+
+            # TODO: Make this less confusing
             if len(tipped) == 0:
                 threading.Thread(target=self.changetip_sender, args=(channel, author, receiver, message[11:])).start()
             elif len(tipped) == 1:
@@ -87,8 +74,12 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
                     receiver = tipped_user
                     threading.Thread(target=self.changetip_sender, args=(channel, author, receiver, message[11:])).start()
                 else:
-                    #TODO: If you dont see a user in a channel, check if the twitch account at least exists using the twitch api
-                    self.message_send_queue["low"].put((channel, "@%s I don't see that user in this channel." % author.capitalize()))
+                    # If can't find user, check if the twitch account at least exists using the twitch api
+                    if self.is_twitch_user(tipped_user):
+                        receiver = tipped_user
+                        threading.Thread(target=self.changetip_sender, args=(channel, author, receiver, message[11:])).start()
+                    else:
+                        self.message_send_queue["low"].put((channel, "@%s That user doesn't exist." % author.capitalize()))
             else:
                 self.message_send_queue["low"].put((channel, "@%s Too many recipients in your message." % author.capitalize()))
 
@@ -116,12 +107,29 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
         elif response.get("state") in ["ok", "accepted"]:
             tip = response["tip"]
             if tip["status"] == "out for delivery":
-                out += "<3 @%s Tip received from @%s for %s. Collect it by connecting your ChangeTip account to Twitch at %s" % (tip["receiver"], sender.capitalize(), tip["amount_display"], self.TipBot.info_url)
+                out += "<3 @%s Tip received from @%s for %s. Collect it by connecting your ChangeTip account to Twitch at %s" % (tip["receiver"], sender.capitalize(), tip["amount_display"], tip["collect_url_short"])
                 self.message_send_queue["high"].put((channel, out))
             elif tip["status"] == "finished":
                 out += "<3 @%s Tip received from @%s, %s has been added to your ChangeTip wallet." % (tip["receiver"].capitalize(), sender.capitalize(), tip["amount_display"])
                 self.message_send_queue["medium"].put((channel, out))
         logging.debug("Changetip Response: " + str(response))
+
+    # Thread for getting loading initial list of users, then checks for new users in 5 minute intervals
+    def load_user_list(self, offset):
+        limit = 50
+        logging.info("Updating user list... [%s - %s]" % (offset, offset+limit))
+        response = self.TipBot.get_users(offset, limit)
+        has_next = response.get("meta").get("next") is not None
+        for user in response["objects"]:
+            channel = "#"+user.get("channel_username")
+            if channel not in self.channels:
+                self.channel_join_queue.put(channel)
+        if has_next:
+            offset += limit+1
+            threading.Timer(15.0, self.load_user_list, args=(offset,)).start()
+        # If list of users is done loading, then start a thread that only gets new users every x minutes.
+        else:
+            threading.Timer(300.0, self.load_user_list, args=(offset,)).start()
 
     # Thread for joining channels, capped at a limit of 50 joins per 15 seconds to follow twitch's restrictions
     def channel_joiner(self, serv):
@@ -182,6 +190,13 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
         queue_size = high_size + medium_size + low_size
         if queue_size > 20:
             logging.warning("Messaging queue is getting too big! HIGH:%s MEDIUM:%s LOW:%s" % (high_size, medium_size, low_size))
+
+    def is_twitch_user(self, username):
+        response = requests.get("https://api.twitch.tv/kraken/users/"+username, headers={'content-type': 'application/json'})
+        if response.status_code == 404:
+                return False
+        else:
+            return True
 
 if __name__ == "__main__":
     botname = os.getenv("TWITCH_BOT", "changetip")
