@@ -31,6 +31,13 @@ $ pip install -r requirements.txt
 You must set the following environment variables to run the bot:
 
 ```
+CHANGETIP_API_KEY
+```
+
+To get an API key, contact support@changetip.com
+
+
+```
 TWITCH_BOT
 ```
 
@@ -51,9 +58,3 @@ Or you can set up a Twitch app in your account settings and make a request to th
 
 Once you have this access token it will not expire unless you generate a new access token.
 
-
-```
-CHANGETIP_API_KEY
-```
-
-To get an API key, contact support@changetip.com
