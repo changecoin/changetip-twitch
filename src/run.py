@@ -2,7 +2,7 @@ import irc.bot
 from irc.bot import IRCDict, Channel
 import os
 import threading
-import queue
+import Queue
 from TwitchChangeTipBot import TwitchChangeTipBot
 import re
 import logging
@@ -29,14 +29,14 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
 
         # Channels set up
         self.channels = IRCDict()
-        self.channel_join_queue = queue.Queue()
+        self.channel_join_queue = Queue.Queue()
         self.channel_join_limiter = 0
 
         # Messages set up
         self.message_send_queue = {
-            "high": queue.Queue(),
-            "medium": queue.Queue(),
-            "low": queue.Queue()
+            "high": Queue.Queue(),
+            "medium": Queue.Queue(),
+            "low": Queue.Queue()
         }
         self.last_message = ""
         self.message_send_limiter = 0
