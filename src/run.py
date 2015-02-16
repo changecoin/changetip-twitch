@@ -199,6 +199,14 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
             return True
 
 if __name__ == "__main__":
-    botname = os.getenv("TWITCH_BOT", "changetip")
-    bot = TwitchIRCBot(botname, "irc.twitch.tv", 6667)
-    bot.start()
+    try:
+        botname = os.getenv("TWITCH_BOT", "changetip")
+        bot = TwitchIRCBot(botname, "irc.twitch.tv", 6667)
+        bot.start()
+    except KeyboardInterrupt:
+        print >> sys.stderr, '\nExiting by user request.\n'
+        sys.exit(0)
+
+
+
+
