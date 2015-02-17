@@ -1,12 +1,12 @@
-import irc.bot
-from irc.bot import IRCDict, Channel
-import os
-import threading
-import Queue
+from irc.bot import IRCDict, Channel, SingleServerIRCBot
 from TwitchChangeTipBot import TwitchChangeTipBot
-import re
 import logging
+import os
+import Queue
+import regex
 import requests
+import sys
+import threading
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', filename='twitch.log', level=logging.INFO)
@@ -15,11 +15,12 @@ console.setLevel(logging.INFO)
 console.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
 logging.getLogger('').addHandler(console)
 
-class TwitchIRCBot(irc.bot.SingleServerIRCBot):
+class TwitchIRCBot(SingleServerIRCBot):
     def __init__(self, botname, server, port=6667):
-
+        print botname
         access_token = "oauth:"+os.getenv("TWITCH_ACCESS_TOKEN", "fake_access_token")
-        irc.bot.SingleServerIRCBot.__init__(self, [(server, port, access_token)], botname, botname)
+        print access_token
+        SingleServerIRCBot.__init__(self, [(server, port, access_token)], botname, botname)
 
         # Bot username for reference
         self.botname = botname
@@ -62,8 +63,8 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
         if message.lower().startswith('!changetip '):
             logging.info(channel+" "+author+": "+message)
             # Check if the message contains a receiver, if not then assume it is for the channel owner
-            pattern = re.compile("(?<=^|(?<=[^a-zA-Z0-9-_\.]))@([A-Za-z]+[A-Za-z0-9]+)")
-            tipped = re.findall(pattern, message)
+            pattern = regex.compile("(?<=^|(?<=[^a-zA-Z0-9-_\.]))@([A-Za-z]+[A-Za-z0-9]+)")
+            tipped = regex.findall(pattern, message)
 
             # TODO: Make this less confusing
             if len(tipped) == 0:
@@ -191,7 +192,7 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
 
 if __name__ == "__main__":
     try:
-        botname = os.getenv("TWITCH_BOT", "changetip")
+        botname = os.getenv("TWITCH_BOT", "ChangeTip")
         bot = TwitchIRCBot(botname, "irc.twitch.tv", 6667)
         bot.start()
     except KeyboardInterrupt:
