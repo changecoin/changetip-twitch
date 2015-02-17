@@ -30,7 +30,6 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
         # Channels set up
         self.channels = IRCDict()
         self.channel_join_queue = Queue.Queue()
-        self.channel_join_limiter = 0
 
         # Messages set up
         self.message_send_queue = {
@@ -39,7 +38,6 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
             "low": Queue.Queue()
         }
         self.last_message = ""
-        self.message_send_limiter = 0
 
         logging.info('Bot initialized.')
 
@@ -51,6 +49,8 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
         threading.Thread(target=self.load_user_list, args=(0,)).start()
         # Start message sending thread
         threading.Thread(target=self.message_sender, args=(serv,)).start()
+        # Watch queue size and make sure it does not grow to large, log it if it does
+        threading.Timer(300.0, self.monitor_message_queue_size).start()
 
     def on_pubmsg(self, serv, event):
         message = ''.join(event.arguments).strip()
@@ -107,7 +107,7 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
         elif response.get("state") in ["ok", "accepted"]:
             tip = response["tip"]
             if tip["status"] == "out for delivery":
-                out += "<3 @%s Tip received from @%s for %s. Collect it by connecting your ChangeTip account to Twitch at %s" % (tip["receiver"], sender.capitalize(), tip["amount_display"], tip["collect_url_short"])
+                out += "<3 @%s Tip received from @%s for %s. Collect it by connecting your ChangeTip account to Twitch at %s" % (tip["receiver"].capitalize(), sender.capitalize(), tip["amount_display"], tip["collect_url_short"])
                 self.message_send_queue["high"].put((channel, out))
             elif tip["status"] == "finished":
                 out += "<3 @%s Tip received from @%s, %s has been added to your ChangeTip wallet." % (tip["receiver"].capitalize(), sender.capitalize(), tip["amount_display"])
@@ -132,56 +132,47 @@ class TwitchIRCBot(irc.bot.SingleServerIRCBot):
             threading.Timer(300.0, self.load_user_list, args=(offset,)).start()
 
     # Thread for joining channels, capped at a limit of 50 joins per 15 seconds to follow twitch's restrictions
+    # 50 joins / 15 seconds = Join up to 5 channels every 1.5 seconds
     def channel_joiner(self, serv):
-        limit = 50
-        seconds = 15.0
-        while True:
-            if not self.channel_join_queue.empty() and self.channel_join_limiter < limit:
-                channel = self.channel_join_queue.get()
-                self.channels[channel] = Channel()
-                serv.join(channel)
-                self.channel_join_limiter += 1
-                logging.info("Joining channel %s" % channel)
-                threading.Timer(seconds, self.channel_unlimit).start()
-
-    def channel_unlimit(self):
-        self.channel_join_limiter -= 1
+        join_count = 0
+        join_limit = 5
+        while not self.channel_join_queue.empty() and join_count < join_limit:
+            channel = self.channel_join_queue.get()
+            self.channels[channel] = Channel()
+            serv.join(channel)
+            logging.info("Joining channel %s" % channel)
+            join_count += 1
+        threading.Timer(1.5, self.channel_joiner, args=(serv,)).start()
 
     # Thread for sending messages, capped at a limit of 20 messages per 30 seconds to follow twitch's restrictions
+    # 20 messages / 30 seconds = Send 1 message every 1.5 seconds
     # TODO: Make the limit higher if bot is a mod in the channel
+    # TODO: Do some clearing if the queue gets way too high
     def message_sender(self, serv):
-        limit = 20
-        seconds = 30.0
-        # Watch queue size and make sure it does not grow to large, log it if it does
-        threading.Timer(300.0, self.monitor_message_queue_size).start()
+        high_size = self.message_send_queue["high"].qsize()
+        medium_size = self.message_send_queue["medium"].qsize()
+        low_size = self.message_send_queue["low"].qsize()
+        queue_size = high_size + medium_size + low_size
 
-        while True:
-            high_size = self.message_send_queue["high"].qsize()
-            medium_size = self.message_send_queue["medium"].qsize()
-            low_size = self.message_send_queue["low"].qsize()
-            queue_size = high_size + medium_size + low_size
+        if queue_size > 0:
+            # Determine priority
+            if high_size > 0:
+                priority = "high"
+            elif medium_size > 0:
+                priority = "medium"
+            else:
+                priority = "low"
 
-            if queue_size > 0 and self.message_send_limiter < limit:
-                if high_size > 0:
-                    priority = "high"
-                elif medium_size > 0:
-                    priority = "medium"
-                else:
-                    priority = "low"
+            # Get message based on priority
+            messagedata = self.message_send_queue[priority].get()
+            channel = messagedata[0]
+            message = messagedata[1]
 
-                messagedata = self.message_send_queue[priority].get()
-                channel = messagedata[0]
-                message = messagedata[1]
-
-                if message != self.last_message:
-                    serv.privmsg(channel, message)
-                    self.last_message = message
-                    logging.info(channel+" "+self.botname+": "+message)
-                    self.message_send_limiter += 1
-                    threading.Timer(seconds, self.message_unlimit).start()
-
-    def message_unlimit(self):
-        self.message_send_limiter -= 1
+            if message != self.last_message:
+                serv.privmsg(channel, message)
+                self.last_message = message
+                logging.info(channel+" "+self.botname+": "+message)
+        threading.Timer(1.5, self.message_sender, args=(serv,)).start()
 
     def monitor_message_queue_size(self,):
         high_size = self.message_send_queue["high"].qsize()
