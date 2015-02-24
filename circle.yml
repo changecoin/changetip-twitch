@@ -12,7 +12,7 @@ dependencies:
 test:
     override:
         - ./lint.sh
-        - python manage.py test -v 2
+        - python src/tests.py
 
 deployment:
     production:
