@@ -1,0 +1,21 @@
+# Config file for CircleCI
+# https://circleci.com/docs/config-sample
+
+machine:
+    environment:
+        APP_ENVIRONMENT: "ci"
+
+dependencies:
+    pre: # use pre instead of override because circle does magic stuff with grunt
+        - PIP_DOWNLOAD_CACHE=$HOME/.pip-download-cache pip install --exists-action w -r requirements.txt
+
+test:
+    override:
+        - ./lint.sh
+        - python manage.py test -v 2
+
+deployment:
+    production:
+        branch: master
+        commands:
+            - python src/deployment/deploy.py

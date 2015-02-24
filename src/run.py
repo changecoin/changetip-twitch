@@ -17,9 +17,9 @@ logging.getLogger('').addHandler(console)
 
 class TwitchIRCBot(SingleServerIRCBot):
     def __init__(self, botname, server, port=6667):
-        print botname
+
         access_token = "oauth:"+os.getenv("TWITCH_ACCESS_TOKEN", "fake_access_token")
-        print access_token
+
         SingleServerIRCBot.__init__(self, [(server, port, access_token)], botname, botname)
 
         # Bot username for reference
@@ -53,10 +53,7 @@ class TwitchIRCBot(SingleServerIRCBot):
         # Watch queue size and make sure it does not grow to large, log it if it does
         threading.Timer(300.0, self.monitor_message_queue_size).start()
 
-    def on_pubmsg(self, serv, event):
-        message = ''.join(event.arguments).strip()
-        author = event.source.nick
-        channel = event.target
+    def _parse_pubmsg(self, message, author, channel):
         # Set default receiver to the channel
         receiver = channel.replace("#", "")
 
@@ -83,6 +80,13 @@ class TwitchIRCBot(SingleServerIRCBot):
                         self.message_send_queue["low"].put((channel, "@%s That user doesn't exist." % author.capitalize()))
             else:
                 self.message_send_queue["low"].put((channel, "@%s Too many recipients in your message." % author.capitalize()))
+
+    def on_pubmsg(self, serv, event):
+        message = ''.join(event.arguments).strip()
+        author = event.source.nick
+        channel = event.target
+
+        return self._parse_pubmsg(message, author, channel)
 
     # Thread for sending and receiving data from ChangeTip
     def changetip_sender(self, channel, sender, receiver, message):
