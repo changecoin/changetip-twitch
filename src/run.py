@@ -3,6 +3,7 @@ from TwitchChangeTipBot import TwitchChangeTipBot
 import logging
 import os
 import Queue
+import random
 import regex
 import requests
 import sys
@@ -19,6 +20,13 @@ class TwitchIRCBot(SingleServerIRCBot):
     def __init__(self, botname, server, port=6667):
 
         access_token = "oauth:"+os.getenv("TWITCH_ACCESS_TOKEN", "fake_access_token")
+
+        logging.info('We have these proxies to choose from: %s', os.getenv("TWITCH_PROXIES", ""))
+        proxies = os.getenv("TWITCH_PROXIES", "").split(",")
+        if any(proxies):
+            proxy = random.choice(proxies)
+            logging.info('using proxy at %s', proxy)
+            # do something with the proxy
 
         SingleServerIRCBot.__init__(self, [(server, port, access_token)], botname, botname)
 
@@ -122,7 +130,7 @@ class TwitchIRCBot(SingleServerIRCBot):
     # Thread for getting loading initial list of users, then checks for new users in 5 minute intervals
     def load_user_list(self, offset):
         limit = 50
-        logging.info("Updating user list... [%s - %s]" % (offset, offset+limit))
+        logging.info("Updating user list... [%s - %s]", offset, offset+limit)
         response = self.TipBot.get_users(offset, limit)
         has_next = response.get("meta").get("next") is not None
         for user in response["objects"]:
@@ -145,7 +153,7 @@ class TwitchIRCBot(SingleServerIRCBot):
             channel = self.channel_join_queue.get()
             self.channels[channel] = Channel()
             serv.join(channel)
-            logging.info("Joining channel %s" % channel)
+            logging.info("Joining channel %s", channel)
             join_count += 1
         threading.Timer(1.5, self.channel_joiner, args=(serv,)).start()
 
