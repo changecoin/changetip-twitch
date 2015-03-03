@@ -2,7 +2,6 @@ from changetip_twitch import ChangeTipTwitch
 from chat_worker import TwitchIRCBot
 from message_center import MessageCenter
 import os
-import sys
 import logging
 import threading
 
@@ -12,6 +11,7 @@ console = logging.StreamHandler()
 console.setLevel(logging.INFO)
 console.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
 logging.getLogger('').addHandler(console)
+
 
 class TwitchMaster(object):
 
@@ -71,10 +71,3 @@ class TwitchMaster(object):
             else:
                 worker_num = 0
         threading.Timer(300.0, self.check_new_users).start()
-
-if __name__ == "__main__":
-    try:
-        Twitch = TwitchMaster()
-    except KeyboardInterrupt:
-        print >> sys.stderr, '\nExiting by user request.\n'
-        sys.exit(0)
