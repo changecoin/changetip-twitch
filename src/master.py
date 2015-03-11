@@ -20,8 +20,15 @@ class TwitchMaster(object):
         self.access_token = "oauth:"+os.getenv("TWITCH_ACCESS_TOKEN", "")
         self.irc_address = "irc.twitch.tv"
 
-        self.worker_names = ["Satoshi"] # Give chat worker bot cool names! (1 per IP connection)
-        self.proxies = os.getenv("TWITCH_PROXIES", "").split(",")
+        # Connections and Proxies
+        self.proxies = []
+        proxy_list = os.getenv("TWITCH_PROXIES", None)
+        if proxy_list is not None:
+            proxy_list = os.getenv("TWITCH_PROXIES", "").split(",")
+            for proxy in proxy_list:
+                proxy_info = proxy.split(":")
+                print proxy_info
+                self.proxies.append({"address": proxy_info[0], "port": int(proxy_info[1])})
 
         # Change Tip
         self.ChangeTip = ChangeTipTwitch()
@@ -30,12 +37,20 @@ class TwitchMaster(object):
         logging.info('[Master] Fetching user list from ChangeTip...')
         self.users_list = self.ChangeTip.get_users()
 
-        # TODO: For each proxy, set up a chat bot, for now just hard code 1
+        # Create chat workers
         logging.info('[Master] Creating chat worker bots...')
         self.chat_bots = {}
-        worker_name = "1:"+self.worker_names[0]
+        worker_num = 1
+        worker_name = "%s:Worker" % worker_num
+        # Create first worker on local ip/connection
         self.chat_bots[worker_name] = TwitchIRCBot(self, worker_name, self.bot_name, self.irc_address, self.access_token, 6667)
         threading.Thread(target=self.chat_bots[worker_name].start).start()
+        # Create subsequent workers on proxy ip/connections
+        for proxy in self.proxies:
+            worker_num += 1
+            worker_name = "%s:Worker" % worker_num
+            self.chat_bots[worker_name] = TwitchIRCBot(self, worker_name, self.bot_name, self.irc_address, self.access_token, 6667, proxy)
+            threading.Thread(target=self.chat_bots[worker_name].start).start()
 
         # Initialize Message Queue
         logging.info('[Master] Initializing messaging queue...')
@@ -44,6 +59,7 @@ class TwitchMaster(object):
         # Tell workers to join channels
         # TODO: Intelligently split up channels between IPs, based on typical channel usage
         logging.info('[Master] Starting channel joins...')
+        worker_name = "%s:Worker" % 1
         self.join_channels(worker_name, self.users_list)
 
         # Start a thread to periodically fetch new users from ChangeTip

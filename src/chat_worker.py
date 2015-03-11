@@ -2,14 +2,20 @@ from irc.bot import IRCDict, Channel, SingleServerIRCBot
 import Queue
 import threading
 import logging
+import socks
+import socket
 
 
 class TwitchIRCBot(SingleServerIRCBot):
 
-    def __init__(self, master, worker_name, bot_name, server, access_token, port=6667):
+    def __init__(self, master, worker_name, bot_name, server, access_token, port=6667, proxy=None):
         self.master = master
         self.worker_name = worker_name
         self.command = "!"+self.master.bot_name
+
+        if proxy is not None:
+            socks.set_default_proxy(socks.HTTP, proxy["address"], proxy["port"])
+            socket.socket = socks.socksocket
 
         SingleServerIRCBot.__init__(self, [(server, port, access_token)], bot_name, bot_name)
 
