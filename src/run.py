@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from irc.bot import IRCDict, Channel, SingleServerIRCBot
 from TwitchChangeTipBot import TwitchChangeTipBot
 import logging
