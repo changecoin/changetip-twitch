@@ -120,7 +120,7 @@ class TwitchIRCBot(SingleServerIRCBot):
         elif response.get("state") in ["ok", "accepted"]:
             tip = response["tip"]
             if tip["status"] == "out for delivery":
-                out += "<3 @%s Tip received from @%s for %s. Collect it by connecting your ChangeTip account to Twitch at %s" % (tip["receiver"].capitalize(), sender.capitalize(), tip["amount_display"], tip["collect_url_short"])
+                out += "<3 @%s Tip received from @%s for %s. Collect it by connecting your Twitch account here ➔ %s" % (tip["receiver"].capitalize(), sender.capitalize(), tip["amount_display"], tip["collect_url_short"])
                 self.message_send_queue["high"].put((channel, out))
             elif tip["status"] == "finished":
                 out += "<3 @%s Tip received from @%s, %s has been added to your ChangeTip wallet." % (tip["receiver"].capitalize(), sender.capitalize(), tip["amount_display"])
