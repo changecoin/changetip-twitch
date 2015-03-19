@@ -12,8 +12,10 @@ class TwitchIRCBot(SingleServerIRCBot):
         self.master = master
         self.worker_name = worker_name
         self.command = "!"+self.master.bot_name
+        self.started = False
 
         if proxy is not None:
+            logging.info('[%s] Proxy set: %s:%s', self.worker_name, proxy["address"], proxy["port"])
             socks.set_default_proxy(socks.HTTP, proxy["address"], proxy["port"])
             socket.socket = socks.socksocket
 
@@ -22,6 +24,7 @@ class TwitchIRCBot(SingleServerIRCBot):
         # Channels set up
         self.channels = IRCDict()
         self.channel_join_queue = Queue.Queue()
+        self.channel_list = []
 
         # Messages set up
         self.user_message_queue = Queue.Queue()
@@ -29,18 +32,28 @@ class TwitchIRCBot(SingleServerIRCBot):
         logging.info('[%s] Chat worker bot initialized.', self.worker_name)
 
     def on_welcome(self, serv, event):
-        logging.info('[%s] Connected to Twitch.tv IRC.', self.worker_name)
-        # Start channel joining thread
-        threading.Thread(target=self.channel_joiner, args=(serv,)).start()
-        # Start message sending thread
-        threading.Thread(target=self.message_sender, args=(serv,)).start()
+        if not self.started:
+            logging.info('[%s] Connected to Twitch.tv IRC.', self.worker_name)
+            # Start channel joining thread
+            threading.Thread(target=self.channel_joiner, args=(serv,)).start()
+            # Start message sending thread
+            threading.Thread(target=self.message_sender, args=(serv,)).start()
+            self.started = True
+        # Welcome is a reconnect, rejoin all channels
+        else:
+            logging.info('[%s] Reconnected to Twitch.tv IRC.', self.worker_name)
+            for channel in self.channel_list:
+                self.channel_join_queue.put(channel)
+
+    def on_disconnect(self, serv, event):
+        logging.warning('[%s] Lost connection to Twitch.tv IRC. Attempting to reconnect...', self.worker_name)
 
     def on_pubmsg(self, serv, event):
         message = ''.join(event.arguments).strip()
         author = event.source.nick
         channel = event.target
 
-        if message.startswith(self.command):
+        if message.startswith(self.command+" ") or message == self.command:
             self.master.process_message(self.worker_name, channel, author, message[len(self.command):].strip())
 
     # Thread for joining channels, capped at a limit of 50 joins per 15 seconds to follow twitch's restrictions
@@ -51,6 +64,7 @@ class TwitchIRCBot(SingleServerIRCBot):
         while not self.channel_join_queue.empty() and join_count < join_limit:
             channel = self.channel_join_queue.get()
             self.channels[channel] = Channel()
+            self.channel_list.append(channel)
             serv.join(channel)
             logging.info("[%s] Joining channel %s", self.worker_name, channel)
             join_count += 1

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from changetip.bots.base import BaseBot
 import datetime
 import hashlib
@@ -58,7 +59,7 @@ class ChangeTipTwitch(BaseBot):
             elif response.get("state") in ["ok", "accepted"]:
                 tip = response["tip"]
                 if tip["status"] == "out for delivery":
-                    tip_output["message"] = "<3 @%s Tip received from @%s for %s. Collect it by connecting your ChangeTip account to Twitch at %s" % (tip["receiver"].capitalize(), sender.capitalize(), tip["amount_display"], tip["collect_url_short"])
+                    tip_output["message"] = "<3 @%s Tip received from @%s for %s. Collect it by connecting your Twitch account here %s %s" % (tip["receiver"].capitalize(), sender.capitalize(), tip["amount_display"], "➔".decode('utf-8'), tip["collect_url_short"])
                     tip_output["priority"] = "high"
                 elif tip["status"] == "finished":
                     tip_output["message"] = "<3 @%s Tip received from @%s, %s has been added to your ChangeTip wallet." % (tip["receiver"].capitalize(), sender.capitalize(), tip["amount_display"])

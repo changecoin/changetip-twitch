@@ -27,7 +27,6 @@ class TwitchMaster(object):
             proxy_list = os.getenv("TWITCH_PROXIES", "").split(",")
             for proxy in proxy_list:
                 proxy_info = proxy.split(":")
-                print proxy_info
                 self.proxies.append({"address": proxy_info[0], "port": int(proxy_info[1])})
 
         # Change Tip
@@ -36,6 +35,7 @@ class TwitchMaster(object):
         # Get list of users
         logging.info('[Master] Fetching user list from ChangeTip...')
         self.users_list = self.ChangeTip.get_users()
+        logging.info('[Master] %s users found.', len(self.users_list))
 
         # Create chat workers
         logging.info('[Master] Creating chat worker bots...')
@@ -58,17 +58,20 @@ class TwitchMaster(object):
 
         # Tell workers to join channels
         # TODO: Intelligently split up channels between IPs, based on typical channel usage
-        logging.info('[Master] Starting channel joins...')
-        worker_name = "%s:Worker" % 1
-        self.join_channels(worker_name, self.users_list)
+        logging.info('[Master] Queueing up channels to join...')
+        self.worker_rotation_num = 0
+        self.split_join_channels(self.users_list)
 
         # Start a thread to periodically fetch new users from ChangeTip
         threading.Timer(300.0, self.check_new_users).start()
 
-
-    def join_channels(self, worker_name, channels):
+    def split_join_channels(self, channels):
         for user in channels:
+            worker_name = self.chat_bots.keys()[self.worker_rotation_num]
             self.chat_bots[worker_name].channel_join_queue.put("#"+user)
+            self.worker_rotation_num += 1
+            if self.worker_rotation_num >= len(self.chat_bots):
+                self.worker_rotation_num = 0
 
     def process_message(self, worker_name, channel, sender, message):
         changetip_out = self.ChangeTip.process_command(channel, sender, message)
@@ -78,12 +81,6 @@ class TwitchMaster(object):
     def check_new_users(self):
         logging.info('[Master] Checking for new users from ChangeTip...')
         new_users_list = self.ChangeTip.get_users(len(self.users_list))
-        worker_num = 0
-        for new_user in new_users_list:
-            worker_name = self.chat_bots.keys()[worker_num]
-            self.chat_bots[worker_name].channel_join_queue.put("#"+new_user)
-            if worker_name < len(self.chat_bots.keys()):
-                worker_num += 1
-            else:
-                worker_num = 0
+        self.users_list.extend(new_users_list)
+        self.split_join_channels(new_users_list)
         threading.Timer(300.0, self.check_new_users).start()
