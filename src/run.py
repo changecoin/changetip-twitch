@@ -69,7 +69,7 @@ class TwitchIRCBot(SingleServerIRCBot):
         if message.lower().startswith('!changetip '):
             logging.info(channel+" "+author+": "+message)
             # Check if the message contains a receiver, if not then assume it is for the channel owner
-            pattern = regex.compile("(?<=^|(?<=[^a-zA-Z0-9-_\.]))@([A-Za-z]+[A-Za-z0-9]+)")
+            pattern = regex.compile("(?<=^|(?<=[^a-zA-Z0-9-_\.]))@([A-Za-z0-9_]+)")
             tipped = regex.findall(pattern, message)
 
             # TODO: Make this less confusing
