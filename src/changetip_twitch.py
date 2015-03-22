@@ -83,7 +83,9 @@ class ChangeTipTwitch(BaseBot):
 
         if has_next:
             offset += limit+1
-            return users.extend(self.get_users(offset))
+            next_users = self.get_users(offset)
+            users.extend(next_users)
+            return users
         else:
             return users
 

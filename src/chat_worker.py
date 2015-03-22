@@ -13,6 +13,7 @@ class TwitchIRCBot(SingleServerIRCBot):
         self.worker_name = worker_name
         self.command = "!"+self.master.bot_name
         self.started = False
+        self.is_connected = False
 
         if proxy is not None:
             logging.info('[%s] Proxy set: %s:%s', self.worker_name, proxy["address"], proxy["port"])
@@ -32,6 +33,7 @@ class TwitchIRCBot(SingleServerIRCBot):
         logging.info('[%s] Chat worker bot initialized.', self.worker_name)
 
     def on_welcome(self, serv, event):
+        self.is_connected = True
         if not self.started:
             logging.info('[%s] Connected to Twitch.tv IRC.', self.worker_name)
             # Start channel joining thread
@@ -46,6 +48,7 @@ class TwitchIRCBot(SingleServerIRCBot):
                 self.channel_join_queue.put(channel)
 
     def on_disconnect(self, serv, event):
+        self.is_connected = False
         logging.warning('[%s] Lost connection to Twitch.tv IRC. Attempting to reconnect...', self.worker_name)
 
     def on_pubmsg(self, serv, event):
@@ -62,19 +65,20 @@ class TwitchIRCBot(SingleServerIRCBot):
         join_count = 0
         join_limit = 5
         while not self.channel_join_queue.empty() and join_count < join_limit:
-            channel = self.channel_join_queue.get()
-            self.channels[channel] = Channel()
-            self.channel_list.append(channel)
-            serv.join(channel)
-            logging.info("[%s] Joining channel %s", self.worker_name, channel)
-            join_count += 1
+            if self.is_connected:
+                channel = self.channel_join_queue.get()
+                self.channels[channel] = Channel()
+                self.channel_list.append(channel)
+                serv.join(channel)
+                logging.info("[%s] Joining channel %s", self.worker_name, channel)
+                join_count += 1
         threading.Timer(1.5, self.channel_joiner, args=(serv,)).start()
 
     # Thread for sending messages, capped at a limit of 20 messages per 30 seconds to follow twitch's restrictions
     # 20 messages / 30 seconds = Send 1 message every 1.5 seconds
     def message_sender(self, serv):
 
-        if self.master.message_center.has_message(self.worker_name):
+        if self.is_connected and self.master.message_center.has_message(self.worker_name):
             mdata = self.master.message_center.get_message(self.worker_name)
             message = mdata["message"]
             channel = mdata["channel"]

@@ -1,5 +1,5 @@
 import unittest2 as unittest # backport for latest python unittest
-from run import TwitchIRCBot
+from chat_worker import TwitchIRCBot
 
 class TestSequenceFunctions(unittest.TestCase):
 
