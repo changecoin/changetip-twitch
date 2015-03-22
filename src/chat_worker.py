@@ -56,7 +56,7 @@ class TwitchIRCBot(SingleServerIRCBot):
         author = event.source.nick
         channel = event.target
 
-        if message.startswith(self.command+" ") or message == self.command:
+        if message.lower().startswith(self.command.lower()+" ") or message.lower() == self.command.lower():
             self.master.process_message(self.worker_name, channel, author, message[len(self.command):].strip())
 
     # Thread for joining channels, capped at a limit of 50 joins per 15 seconds to follow twitch's restrictions
