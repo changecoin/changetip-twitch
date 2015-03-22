@@ -17,6 +17,8 @@ console.setLevel(logging.INFO)
 console.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
 logging.getLogger('').addHandler(console)
 
+# Restart bot
+
 class TwitchIRCBot(SingleServerIRCBot):
     def __init__(self, botname, server, port=6667):
 
