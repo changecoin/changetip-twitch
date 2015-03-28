@@ -22,7 +22,7 @@ class TwitchMaster(object):
 
         # Connections and Proxies
         self.proxies = []
-        proxy_list = None # os.getenv("TWITCH_PROXIES", None)
+        proxy_list = os.getenv("TWITCH_PROXIES", None)
         if proxy_list is not None:
             proxy_list = os.getenv("TWITCH_PROXIES", "").split(",")
             for proxy in proxy_list:
