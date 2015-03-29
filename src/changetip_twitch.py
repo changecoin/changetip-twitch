@@ -75,19 +75,18 @@ class ChangeTipTwitch(BaseBot):
 
     def get_users(self, offset=0, limit=200):
         response = requests.get(self.get_api_url("/channels/twitch/users"), params={'offset': offset, 'limit': limit}, headers={'content-type': 'application/json'})
-        response = response.json()
-        has_next = response.get("meta").get("next") is not None
         users = []
-        for user in response["objects"]:
-            users.append(user.get("channel_username"))
-
-        if has_next:
-            offset += limit+1
-            next_users = self.get_users(offset)
-            users.extend(next_users)
-            return users
-        else:
-            return users
+        if response.status_code == 200:
+            response = response.json()
+            has_next = response.get("meta").get("next") is not None
+            for user in response["objects"]:
+                users.append(user.get("channel_username"))
+            if has_next:
+                offset += limit+1
+                next_users = self.get_users(offset)
+                users.extend(next_users)
+                return users
+        return users
 
     # TODO Optimize this where ever possible
     def is_twitch_user(self, username):
