@@ -47,7 +47,7 @@ class ChangeTipTwitch(BaseBot):
                 "receiver": "%s" % receiver,
                 "message": message,
                 "context_uid": self.unique_id(channel+" "+sender+": "+message),
-                "meta": {"context_url": "twitch.tv/%s" % channel.replace("#", "")}
+                "meta": {"context_url": "http//:www.twitch.tv/%s" % channel.replace("#", "")}
             }
             response = self.send_tip(**tip_data)
             if response.get("error_code") == "invalid_sender":

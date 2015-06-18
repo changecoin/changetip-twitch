@@ -22,12 +22,11 @@ class TwitchMaster(object):
 
         # Connections and Proxies
         self.proxies = []
-        proxy_list = None # os.getenv("TWITCH_PROXIES", None)
-        if proxy_list is not None:
-            proxy_list = os.getenv("TWITCH_PROXIES", "").split(",")
-            for proxy in proxy_list:
-                proxy_info = proxy.split(":")
-                self.proxies.append({"address": proxy_info[0], "port": int(proxy_info[1])})
+
+        proxy_list = os.getenv("TWITCH_PROXIES", "").split(",")
+        for proxy in proxy_list:
+            proxy_info = proxy.split(":")
+            self.proxies.append({"address": proxy_info[0], "port": int(proxy_info[1])})
 
         # Change Tip
         self.ChangeTip = ChangeTipTwitch()
