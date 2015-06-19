@@ -23,7 +23,7 @@ class TwitchIRCBot(SingleServerIRCBot):
         SingleServerIRCBot.__init__(self, [(server, port, access_token)], bot_name, bot_name)
 
         # keep ip for logging
-        self.ipaddress = socket.gethostbyname(socket.gethostname())
+        self.proxy_name = socket.gethostbyname(socket.getfqdn())
 
         # Channels set up
         self.channels = IRCDict()
@@ -36,7 +36,7 @@ class TwitchIRCBot(SingleServerIRCBot):
         self.log('Chat worker bot initialized.')
 
     def log(self, message):
-        logging.info('[%s:%s] %s', self.ipaddress, self.worker_name, message)
+        logging.info('[%s]:[%s] %s', self.proxy_name, self.worker_name, message)
 
 
     def on_welcome(self, serv, event):
