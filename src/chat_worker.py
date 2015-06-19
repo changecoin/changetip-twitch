@@ -22,6 +22,9 @@ class TwitchIRCBot(SingleServerIRCBot):
 
         SingleServerIRCBot.__init__(self, [(server, port, access_token)], bot_name, bot_name)
 
+        # keep ip for logging
+        self.ipaddress = socket.gethostbyname(socket.gethostname())
+
         # Channels set up
         self.channels = IRCDict()
         self.channel_join_queue = Queue.Queue()
@@ -30,12 +33,16 @@ class TwitchIRCBot(SingleServerIRCBot):
         # Messages set up
         self.user_message_queue = Queue.Queue()
 
-        logging.info('[%s] Chat worker bot initialized.', self.worker_name)
+        self.log('Chat worker bot initialized.')
+
+    def log(self, message):
+        logging.info('[%s:%s] %s', self.ipaddress, self.worker_name, message)
+
 
     def on_welcome(self, serv, event):
         self.is_connected = True
         if not self.started:
-            logging.info('[%s] Connected to Twitch.tv IRC.', self.worker_name)
+            self.log('Connected to Twitch.tv IRC.')
             # Start channel joining thread
             threading.Thread(target=self.channel_joiner, args=(serv,)).start()
             # Start message sending thread
@@ -43,7 +50,7 @@ class TwitchIRCBot(SingleServerIRCBot):
             self.started = True
         # Welcome is a reconnect, rejoin all channels
         else:
-            logging.info('[%s] Reconnected to Twitch.tv IRC.', self.worker_name)
+            self.log('Reconnected to Twitch.tv IRC.')
             for channel in self.channel_list:
                 self.channel_join_queue.put(channel)
 
@@ -70,7 +77,7 @@ class TwitchIRCBot(SingleServerIRCBot):
                 self.channels[channel] = Channel()
                 self.channel_list.append(channel)
                 serv.join(channel)
-                logging.info("[%s] Joining channel %s", self.worker_name, channel)
+                self.log("Joining channel %s" % channel)
                 join_count += 1
         threading.Timer(1.5, self.channel_joiner, args=(serv,)).start()
 
