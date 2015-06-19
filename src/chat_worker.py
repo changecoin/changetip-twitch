@@ -56,7 +56,13 @@ class TwitchIRCBot(SingleServerIRCBot):
 
     def on_disconnect(self, serv, event):
         self.is_connected = False
-        logging.warning('[%s] Lost connection to Twitch.tv IRC. Attempting to reconnect...', self.worker_name)
+
+        event_str = "{} : {} : {} : {}".format(event.eventtype(), event.source(), event.target(), event.arguments())
+
+        logging.warning('[%s] Lost connection to Twitch.tv IRC.', self.worker_name)
+        logging.warning('[%s] More info: %s', self.worker_name, serv.info())
+        logging.warning('[%s] Even more info: %s ', self.worker_name, event_str)
+        logging.warning('[%s] Attempting to reconnect...', self.worker_name)
 
     def on_pubmsg(self, serv, event):
         message = ''.join(event.arguments).strip()
