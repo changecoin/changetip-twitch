@@ -57,7 +57,7 @@ class TwitchIRCBot(SingleServerIRCBot):
     def on_disconnect(self, serv, event):
         self.is_connected = False
 
-        event_str = "{} : {} : {} : {}".format(event.eventtype(), event.source(), event.target(), event.arguments())
+        event_str = str(event)
 
         logging.warning('[%s] Lost connection to Twitch.tv IRC.', self.worker_name)
         logging.warning('[%s] More info: %s', self.worker_name, serv.info())
