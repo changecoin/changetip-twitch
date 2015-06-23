@@ -79,7 +79,7 @@ class TwitchIRCBot(SingleServerIRCBot):
     # 50 joins / 15 seconds = Join up to 5 channels every 1.5 seconds
     def channel_joiner(self, serv):
         join_count = 0
-        join_limit = 5
+        join_limit = 4
         while not self.channel_join_queue.empty() and join_count < join_limit:
             if self.is_connected:
                 channel = self.channel_join_queue.get()
