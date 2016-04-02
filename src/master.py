@@ -24,9 +24,10 @@ class TwitchMaster(object):
         self.proxies = []
 
         proxy_list = os.getenv("TWITCH_PROXIES", "").split(",")
-        for proxy in proxy_list:
-            proxy_info = proxy.split(":")
-            self.proxies.append({"address": proxy_info[0], "port": int(proxy_info[1])})
+        if proxy_list[0] != "":
+            for proxy in proxy_list:
+                proxy_info = proxy.split(":")
+                self.proxies.append({"address": proxy_info[0], "port": int(proxy_info[1])})
 
         # Change Tip
         self.ChangeTip = ChangeTipTwitch()
