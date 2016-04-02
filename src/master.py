@@ -18,7 +18,7 @@ class TwitchMaster(object):
     def __init__(self):
         self.bot_name = os.getenv("TWITCH_BOT", "ChangeTip")
         self.access_token = "oauth:"+os.getenv("TWITCH_ACCESS_TOKEN", "")
-        self.irc_address = "irc.twitch.tv"
+        self.irc_address = "irc.chat.twitch.tv"
 
         # Connections and Proxies
         self.proxies = []
